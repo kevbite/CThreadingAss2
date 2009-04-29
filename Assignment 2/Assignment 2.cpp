@@ -42,11 +42,14 @@ int _tmain(int argc, _TCHAR* argv[])
 	kevsoft::Thread<A, int> *thread1 = new kevsoft::Thread<A, int>();
 	kevsoft::Thread<A, bool> *thread2 = new kevsoft::Thread<A, bool>();
 	kevsoft::Thread<A, std::string> *thread3 = new kevsoft::Thread<A, std::string>();
+	kevsoft::Thread<A, std::string> *thread3cpy = new kevsoft::Thread<A, std::string>(*thread3);
 	kevsoft::Thread<A, void> *thread4 = new kevsoft::Thread<A, void>();
 
 	thread1->Run(a, &A::operator (), 0);
 	thread2->Run(a, true);
 	thread3->Run(a, "Hello");
+	thread4->Run(a);
+	thread4->Run(a);
 	thread4->Run(a);
 
 

@@ -19,6 +19,8 @@ public:
 
 	~Thread(void);
 
+	Thread(Thread<C,P>&);
+
 	void Run(C* pClass, FuncPtr pfFunc, P p );
 
 	void Run(C* pClass, FuncPtr pfFunc);
@@ -39,7 +41,7 @@ public:
 
 	static unsigned int __stdcall funcCall(void* pArg) {
 
-		while (true)
+		while (true)//we always want to keep this thread running
 		{
 			//cast to thread object
 			Thread *pThread = (Thread*)pArg;
@@ -76,6 +78,8 @@ public:
 
 	~Thread(void);
 
+	Thread(Thread<C>&);
+
 	void Run(C* pClass, FuncPtr pfFunc);
 
 	void Run(C* pClass);
@@ -92,7 +96,7 @@ public:
 
 	static unsigned int __stdcall funcCall(void* pArg) {
 
-		while (true)
+		while (true)//we always want to keep this thread running
 		{
 			//cast to thread object
 			Thread *pThread = (Thread*)pArg;
@@ -119,7 +123,8 @@ private:
 
 
 template<class C, class P>
-Thread<C,P>::Thread() : running_(false)
+Thread<C,P>::Thread()
+: running_(false), pfFunc_(0), pClass_(0)
 {
 	handle_ = (HANDLE)_beginthreadex(
             0, // Security attributes
@@ -131,7 +136,8 @@ Thread<C,P>::Thread() : running_(false)
 }
 
 template<class C>
-Thread<C,void>::Thread() : running_(false)
+Thread<C,void>::Thread()
+: running_(false), pfFunc_(0), pClass_(0)
 {
 	handle_ = (HANDLE)_beginthreadex(
             0, // Security attributes
@@ -155,6 +161,27 @@ Thread<C,void>::~Thread()
 	Terminate();
 	CloseHandle (handle_);
 }
+
+template<class C, class P>
+Thread<C,P>::Thread(Thread<C,P>& thread) 
+: running_(false), pfFunc_(0), pClass_(0)
+{
+	if(thread.pfFunc_!=0)
+		pfFunc_ = thread.pfFunc_;
+	if(thread.pClass_!=0)
+		pClass_ = new C(*thread.pClass_);
+
+	pArgs_ = P(thread.pArgs_);
+	
+	handle_ = (HANDLE)_beginthreadex(
+            0, // Security attributes
+            0, // Stack size
+			&funcCall, //func to call
+            this, //arg to pass
+            CREATE_SUSPENDED, //flags
+            &tid_); //thread id
+}
+
 
 template<class C, class P>
 void Thread<C,P>::Run(C *pClass, FuncPtr pfFunc, P pArgs)
@@ -235,6 +262,8 @@ void Thread<C,P>::Resume()
 template<class C>
 void Thread<C,void>::Resume()
 {
+	if(running_) throw exceptions::AlreadyRunningException();
+
 	running_ = true;
 	ResumeThread (handle_);
 }
@@ -242,6 +271,8 @@ void Thread<C,void>::Resume()
 template<class C, class P>
 void Thread<C,P>::Suspend()
 {
+	if(running_) throw exceptions::AlreadyRunningException();
+
 	running_ = true;
 	SuspendThread(handle_);
 }
