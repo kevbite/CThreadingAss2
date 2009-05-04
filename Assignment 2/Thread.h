@@ -17,6 +17,8 @@ namespace kevsoft {
 
 		Thread(const Thread&);
 
+		void init();
+
 		template <class C, class P>
 		bool Run(C* pClass, void (C::*pfFunc)(P), P p );
 
@@ -28,6 +30,7 @@ namespace kevsoft {
 
 		template <class C>
 		bool Run(C* pClass);
+
 
 		bool Suspend();
 	 
@@ -43,21 +46,37 @@ namespace kevsoft {
 	private:
 		ThreadFunctorBase* functor_;
 
-		HANDLE hRunningEvent_;
 		HANDLE handle_;		//Thread Handle
 		unsigned tid_;		// Thread ID
 
-		bool Run(ThreadFunctorBase* pClass);
 
 		void CallThreadFunc() const;
 
 		static unsigned int __stdcall funcCall(void* pArg);
+
+	protected:
+		HANDLE hRunningEvent_;
+
+		bool Run(ThreadFunctorBase* pClass);
 
 
 	};
 
 	Thread::Thread()
 		: functor_(0)
+	{
+		init();
+	}
+
+	Thread::~Thread()
+	{
+		Terminate();
+		CloseHandle (handle_);
+
+		delete functor_;
+	}
+
+	void Thread::init()
 	{
 		hRunningEvent_ = CreateEvent( 
 			NULL,               // default security attributes
@@ -75,21 +94,15 @@ namespace kevsoft {
 				&tid_); //thread id
 	}
 
-	Thread::~Thread()
-	{
-		Terminate();
-		CloseHandle (handle_);
-
-		delete functor_;
-	}
-
 	Thread::Thread(const Thread& thread)
+		:functor_(0)
 	{
-		//Call Default Constructor
 		//This will set our Thread and Running event up
-		Thread();
-
-		functor_ = thread.functor_->Clone();	
+		init();		
+		//Check if the thread has a functor assigned
+		if(thread.functor_!=0)
+			//Copy it to this Thread
+			functor_ = thread.functor_->Clone();	
 		
 		//if the thread were copying is running
 		if(thread.isRunning())
@@ -102,7 +115,7 @@ namespace kevsoft {
 	template <class C, class P>
 	bool Thread::Run(C* pClass, void (C::*pfFunc)(P), P p )
 	{
-		return Run(
+		return Run((ThreadFunctorBase*)
 				new ThreadFunctor<C, P>(pClass, pfFunc, p)
 				);
 	}
@@ -110,7 +123,7 @@ namespace kevsoft {
 	template <class C>
 	bool Thread::Run(C* pClass, void (C::*pfFunc)(void))
 	{
-		return Run(
+		return Run((ThreadFunctorBase*)
 				new ThreadFunctor<C>(pClass, pfFunc)
 				);
 	}
@@ -118,7 +131,7 @@ namespace kevsoft {
 	template <class C, class P>
 	bool Thread::Run(C* pClass, P p)
 	{
-		return Run(
+		return Run((ThreadFunctorBase*)
 				new ThreadFunctor<C, P>(pClass, p)
 		);
 	}
@@ -126,7 +139,7 @@ namespace kevsoft {
 	template <class C>
 	bool Thread::Run(C* pClass)
 	{
-		return Run(
+		return Run((ThreadFunctorBase*)
 			new ThreadFunctor<C>(pClass)
 		);
 	}

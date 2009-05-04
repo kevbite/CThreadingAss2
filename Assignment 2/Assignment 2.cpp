@@ -9,7 +9,7 @@
 #include <conio.h>
 #include "windows.h" 
 
-#include "ThreadFunctor.h"
+#include "ThreadPool.h"
 
 class A
 {
@@ -30,8 +30,8 @@ public:
 	}
 	void operator ()(std::string s)
 	{
-		Sleep(1000);
 		std::cout << s;
+		Sleep(1000);
 	}
 	void operator ()(void)
 	{
@@ -130,12 +130,15 @@ int _tmain(int argc, _TCHAR* argv[])
 	std::cout << "Done 2 with args..." << std::endl;
 
 	std::cout << "Run std::string arg on A" << std::endl;
-	thread1.Run<A,std::string>(&A(), "Hello123");
+	thread1.Run(&A(), std::string("Hello123"));
 	std::cout << "Copying Thread1" << std::endl;
 	kevsoft::Thread thread1cpy(thread1);
+	//thread1.isRunning();
 	thread1.Wait();
 	thread1cpy.Wait();
 
+	//thread1.Run(&A(), std::string("Hello123"));
+	
 
 	return 0;
 }

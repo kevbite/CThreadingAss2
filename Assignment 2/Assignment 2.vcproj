@@ -209,6 +209,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\PThread.h"
+				>
+			</File>
+			<File
 				RelativePath=".\stdafx.h"
 				>
 			</File>
@@ -226,6 +230,10 @@
 			</File>
 			<File
 				RelativePath=".\ThreadFunctorBase.h"
+				>
+			</File>
+			<File
+				RelativePath=".\ThreadPool.h"
 				>
 			</File>
 			<Filter
