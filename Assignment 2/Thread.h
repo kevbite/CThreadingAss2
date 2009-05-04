@@ -1,325 +1,226 @@
 #pragma once
 #include <windows.h>
 #include <process.h>
-#include <math.h>
 #include "Exceptions.h"
+#include "ThreadFunctor.h"
 
 namespace kevsoft {
-//C = Class
-//P = Pramamter
 
-template<class C, class P = void>
-class Thread
-{
+	class Thread
+	{
 
-public:
-    typedef void (C::*FuncPtr)(P );
-    
-	Thread(void);
+	public:
+	   
+		Thread(void);
 
-	~Thread(void);
+		~Thread(void);
 
-	Thread(Thread<C,P>&);
+		Thread(const Thread&);
 
-	void Run(C* pClass, FuncPtr pfFunc, P p );
+		template <class C, class P>
+		bool Run(C* pClass, void (C::*pfFunc)(P), P p );
 
-	void Run(C* pClass, FuncPtr pfFunc);
+		template <class C>
+		bool Run(C* pClass, void (C::*pfFunc)(void));
 
-	void Run(C* pClass, P p);
+		template <class C, class P>
+		bool Run(C* pClass, P p);
 
-	void Run(C* pClass);
+		template <class C>
+		bool Run(C* pClass);
 
-	void Suspend();
- 
-	void Resume();
+		bool Suspend();
+	 
+		bool Resume();
 
-	void Terminate();
+		bool Terminate();
 
-	void Wait();
+		void Wait() const;
 
-	void CallThreadFunc();
-
-	static unsigned int __stdcall funcCall(void* pArg) {
-
-		while (true)//we always want to keep this thread running
-		{
-			//cast to thread object
-			Thread *pThread = (Thread*)pArg;
-			//call thread func
-			pThread->CallThreadFunc();
-			
-			//suspend the thread
-			pThread->Suspend();
-		}
-
-	return 0;
-  }   
-
-private:
-	bool running_;
-
-	FuncPtr pfFunc_;		//Function to call
-	C *pClass_;				//The Functor/Class
-	P pArgs_;				//Arguments to pass to function
-
-    HANDLE handle_;			// Thread Handle
-    unsigned tid_;			// Thread ID
-
-};
-
-template<class C>
-class Thread<C,void>
-{
-
-public:
-    typedef void (C::*FuncPtr)(void);
-    
-	Thread(void);
-
-	~Thread(void);
-
-	Thread(Thread<C>&);
-
-	void Run(C* pClass, FuncPtr pfFunc);
-
-	void Run(C* pClass);
-
-	void Suspend();
- 
-	void Resume();
-
-	void Terminate();
-
-	void Wait();
-
-	void CallThreadFunc();
-
-	static unsigned int __stdcall funcCall(void* pArg) {
-
-		while (true)//we always want to keep this thread running
-		{
-			//cast to thread object
-			Thread *pThread = (Thread*)pArg;
-			//call thread func
-			pThread->CallThreadFunc();
-			
-			//suspend the thread
-			pThread->Suspend();
-		}
-
-	return 0;
-  }   
-
-private:
-	bool running_;
-
-	FuncPtr pfFunc_;	//Function to call
-	C *pClass_;			//Class
-
-    HANDLE handle_;		//Thread Handle
-    unsigned tid_;		// Thread ID
-
-};
+		bool isRunning() const;
 
 
-template<class C, class P>
-Thread<C,P>::Thread()
-: running_(false), pfFunc_(0), pClass_(0)
-{
-	handle_ = (HANDLE)_beginthreadex(
-            0, // Security attributes
-            0, // Stack size
-			&funcCall, //func to call
-            this, //arg to pass
-            CREATE_SUSPENDED, //flags
-            &tid_); //thread id
-}
+	private:
+		ThreadFunctorBase* functor_;
 
-template<class C>
-Thread<C,void>::Thread()
-: running_(false), pfFunc_(0), pClass_(0)
-{
-	handle_ = (HANDLE)_beginthreadex(
-            0, // Security attributes
-            0, // Stack size
-			&funcCall, //func to call
-            this, //arg to pass
-            CREATE_SUSPENDED, //flags
-            &tid_); //thread id
-}
+		HANDLE hRunningEvent_;
+		HANDLE handle_;		//Thread Handle
+		unsigned tid_;		// Thread ID
 
-template<class C, class P>
-Thread<C,P>::~Thread()
-{
-	Terminate();
-	CloseHandle (handle_);
-}
+		bool Run(ThreadFunctorBase* pClass);
 
-template<class C>
-Thread<C,void>::~Thread()
-{
-	Terminate();
-	CloseHandle (handle_);
-}
+		void CallThreadFunc() const;
 
-template<class C, class P>
-Thread<C,P>::Thread(Thread<C,P>& thread) 
-: running_(false), pfFunc_(0), pClass_(0)
-{
-	if(thread.pfFunc_!=0)
-		pfFunc_ = thread.pfFunc_;
-	if(thread.pClass_!=0)
-		pClass_ = new C(*thread.pClass_);
+		static unsigned int __stdcall funcCall(void* pArg);
 
-	pArgs_ = P(thread.pArgs_);
+
+	};
+
+	Thread::Thread()
+		: functor_(0)
+	{
+		hRunningEvent_ = CreateEvent( 
+			NULL,               // default security attributes
+			TRUE,               // manual-reset event
+			FALSE,              // initial state is nonsignaled
+			TEXT("RunningEvt")  // object name
+			); 
+
+		handle_ = (HANDLE)_beginthreadex(
+				0, // Security attributes
+				0, // Stack size
+				&funcCall, //func to call
+				this, //arg to pass
+				CREATE_SUSPENDED, //flags
+				&tid_); //thread id
+	}
+
+	Thread::~Thread()
+	{
+		Terminate();
+		CloseHandle (handle_);
+
+		delete functor_;
+	}
+
+	Thread::Thread(const Thread& thread)
+	{
+		//Call Default Constructor
+		//This will set our Thread and Running event up
+		Thread();
+
+		functor_ = thread.functor_->Clone();	
+		
+		//if the thread were copying is running
+		if(thread.isRunning())
+			//run this thread
+			Resume();
+
+	}
+
+
+	template <class C, class P>
+	bool Thread::Run(C* pClass, void (C::*pfFunc)(P), P p )
+	{
+		return Run(
+				new ThreadFunctor<C, P>(pClass, pfFunc, p)
+				);
+	}
+
+	template <class C>
+	bool Thread::Run(C* pClass, void (C::*pfFunc)(void))
+	{
+		return Run(
+				new ThreadFunctor<C>(pClass, pfFunc)
+				);
+	}
 	
-	handle_ = (HANDLE)_beginthreadex(
-            0, // Security attributes
-            0, // Stack size
-			&funcCall, //func to call
-            this, //arg to pass
-            CREATE_SUSPENDED, //flags
-            &tid_); //thread id
-}
+	template <class C, class P>
+	bool Thread::Run(C* pClass, P p)
+	{
+		return Run(
+				new ThreadFunctor<C, P>(pClass, p)
+		);
+	}
 
+	template <class C>
+	bool Thread::Run(C* pClass)
+	{
+		return Run(
+			new ThreadFunctor<C>(pClass)
+		);
+	}
 
-template<class C, class P>
-void Thread<C,P>::Run(C *pClass, FuncPtr pfFunc, P pArgs)
-{
-	//set the pointers
-	pClass_ = pClass;
-	pfFunc_ = pfFunc;
-	pArgs_ = pArgs;
+	bool Thread::Run(ThreadFunctorBase* pFunctor)
+	{
+		//set the functor_ of class
+		functor_ = pFunctor;
 
-	//resume the thread
-	ResumeThread (handle_);
-}
+		//resume the thread
+		return Resume();
+	}
 
-template<class C, class P>
-void Thread<C,P>::Run(C *pClass, P pArgs)
-{
-	//set the pointers
-	pClass_ = pClass;
-	pfFunc_ = &C::operator ();
-	pArgs_ = pArgs;
+	bool Thread::Resume()
+	{
+		//if(running_) throw exceptions::AlreadyRunningException();
+		//try resume the thread
+		//Resume Thread return values:
+		// -1 = Failed
+		// previous suspend count = success
+		bool result = (ResumeThread (handle_) != -1);
 
-	//resume the thread
-	ResumeThread (handle_);
-}
+		//if thread was resumed
+		if(result)
+			//reset the event so we know the tread is running
+			ResetEvent(hRunningEvent_);
 
-template <class C, class P>
-void Thread<C,P>::Run(C* pClass, FuncPtr pfFunc)
-{
-	//set the pointers
-	pClass_ = pClass;
-	pfFunc_ = pfFunc;
-	pArgs_ = 0;
+		//return success
+		return result;
+	}
 
-	//resume the thread
-	ResumeThread (handle_);
-}
+	bool Thread::Suspend()
+	{
+		//Set the running event 
+		SetEvent(hRunningEvent_);
+		
+		//try resume the thread
+		//Resume Thread return values:
+		// -1 = Failed
+		// previous suspend count = success
+		bool result = (SuspendThread(handle_) != -1);
 
-template <class C>
-void Thread<C,void>::Run(C* pClass, FuncPtr pfFunc)
-{
-	//set the pointers
-	pClass_ = pClass;
-	pfFunc_ = pfFunc;
+		//return success
+		return result;
+	}
 
-	//resume the thread
-	ResumeThread (handle_);
-}
+	bool Thread::Terminate()
+	{
+		//set the running event
+		SetEvent(hRunningEvent_);
+		//get the result of the termination of thread
+		bool result = (TerminateThread(handle_, 0) != 0);
+		//return result
+		return result;
+	}
 
-template <class C, class P>
-void Thread<C,P>::Run(C* pClass)
-{
-	//set the pointers
-	pClass_ = pClass;
-	pfFunc_ = &C::operator ();
-	pArgs_ = pArgs;
+	void Thread::Wait() const
+	{
+		//wait for a running event
+		WaitForSingleObject(hRunningEvent_,INFINITE);   
+	}
 
-	//resume the thread
-	ResumeThread (handle_);
-}
+	bool Thread::isRunning() const
+	{
+		//do a wait for 0 ms, if 0 is returned object is signaled.
+		bool result = WaitForSingleObject(hRunningEvent_, 0) != 0;
+		//return result
+		return result;
+	}
 
-template <class C>
-void Thread<C,void>::Run(C* pClass)
-{
-	//set the pointers
-	pClass_ = pClass;
-	pfFunc_ = &C::operator ();
+	void Thread::CallThreadFunc() const
+	{
+		//if there is a thread functor object assigned
+		if(functor_!=0)
+			//run the operations
+			(functor_->operator())();
+	}
 
-	//resume the thread
-	ResumeThread (handle_);
-}
+	/* Static */
+	unsigned int __stdcall Thread::funcCall(void* pArg) {
 
-template<class C, class P>
-void Thread<C,P>::Resume()
-{
-	ResumeThread (handle_);
-}
+		while (true)//we always want to keep this thread running
+		{
+			//cast to thread object
+			Thread *pThread = (Thread*)pArg;
+			//call thread func
+			pThread->CallThreadFunc();
+			
+			//suspend the thread
+			pThread->Suspend();
+		}
 
-template<class C>
-void Thread<C,void>::Resume()
-{
-	if(running_) throw exceptions::AlreadyRunningException();
-
-	running_ = true;
-	ResumeThread (handle_);
-}
-
-template<class C, class P>
-void Thread<C,P>::Suspend()
-{
-	if(running_) throw exceptions::AlreadyRunningException();
-
-	running_ = true;
-	SuspendThread(handle_);
-}
-
-template<class C>
-void Thread<C,void>::Suspend()
-{
-	running_ = false;
-	SuspendThread(handle_);
-}
-
-template<class C, class P>
-void Thread<C,P>::Terminate()
-{
-	running_ = false;
-	TerminateThread(handle_, 0);
-}
-
-template<class C>
-void Thread<C,void>::Terminate()
-{
-	TerminateThread(handle_, 0);
-}
-
-template<class C, class P>
-void Thread<C,P>::Wait()
-{
-	while(running_);
-}
-
-template<class C>
-void Thread<C,void>::Wait()
-{
-	while(running_);
-}
-
-template<class C, class P>
-void Thread<C,P>::CallThreadFunc()
-{
-	(pClass_->*pfFunc_)(pArgs_);
-}
-
-template<class C>
-void Thread<C, void>::CallThreadFunc()
-{
-	(pClass_->*pfFunc_)();
-}
+		return 0;
+	}   
 
 
 }
