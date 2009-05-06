@@ -59,7 +59,6 @@ namespace kevsoft {
 
 		bool Run(ThreadFunctorBase* pClass);
 
-
 	};
 
 	Thread::Thread()
@@ -81,7 +80,7 @@ namespace kevsoft {
 		hRunningEvent_ = CreateEvent( 
 			NULL,               // default security attributes
 			TRUE,               // manual-reset event
-			FALSE,              // initial state is nonsignaled
+			TRUE,              // initial state is signaled
 			TEXT("RunningEvt")  // object name
 			); 
 

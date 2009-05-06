@@ -3,6 +3,7 @@
 #include <vector>
 #include "PThread.h"
 #include "windows.h"
+#include "Mutex.h"
 
 namespace kevsoft{
 
@@ -32,14 +33,18 @@ namespace kevsoft{
 		
 		void Schedule(ThreadFunctorBase* pClass);
 
+		void Wait();
 
 	private:
 		static const int DEFAULT_POOL_SIZE = 10;
-		std::queue<ThreadFunctorBase*> threadQueue_;
+		std::queue<ThreadFunctorBase*> jobQueue_;
 		std::vector<PThread> threads_;
 		Thread poolThread_;
 		std::vector<HANDLE> runningEvents_;
 
+		Mutex jobQueueMutex_;
+		HANDLE hJobAddedEvt_;
+		HANDLE hAllJobsFinishedEvt_;
 		void CheckSchedule(void);
 
 	};
@@ -56,12 +61,27 @@ namespace kevsoft{
 
 	void ThreadPool::init(const int &poolSize)
 	{
+		//Create job added event
+		hJobAddedEvt_ = CreateEvent( 
+					NULL,               // default security attributes
+					TRUE,               // manual-reset event
+					FALSE,              // initial state is nonsignaled
+					TEXT("JobAddedEvt")  // object name
+					); 
+
+		//Create All jobs finished added event
+		hAllJobsFinishedEvt_ = CreateEvent( 
+					NULL,               // default security attributes
+					TRUE,               // manual-reset event
+					TRUE,              // initial state is signaled
+					TEXT("JobsFinishedEvt")  // object name
+					); 
 		//reserve space in vectors
 		threads_.reserve(poolSize);
 		runningEvents_.reserve(poolSize);
 
 		//loop though until poolsize
-		
+		for(int i(0); i < poolSize; ++i)
 		{
 			//Create a Pool Thread
 			PThread t;
@@ -114,14 +134,28 @@ namespace kevsoft{
 
 	void ThreadPool::Schedule(ThreadFunctorBase* pFunctor)
 	{
+		//lock the mutex
+		jobQueueMutex_.Lock();
 		//add to the queue
-		threadQueue_.push(pFunctor);
+		jobQueue_.push(pFunctor);
+		//update the queue event
+		SetEvent(hJobAddedEvt_);
+		//reset the All Jobs Finished Event
+		ResetEvent(hAllJobsFinishedEvt_);
+		//unlock mutex
+		jobQueueMutex_.Unlock();
 	}
 
+	void ThreadPool::Wait()
+	{
+		//wait until all jobs are finished
+		WaitForSingleObject(hAllJobsFinishedEvt_ ,INFINITE);
+	}
 	void ThreadPool::CheckSchedule(void)
 	{
 		while(true)
 		{
+			//wait for a thread object to become free (using events)
 			DWORD dwEvent = 
 				WaitForMultipleObjects( 
 					static_cast<DWORD>(runningEvents_.size()),// number of objects in array
@@ -129,18 +163,32 @@ namespace kevsoft{
 					FALSE,       // wait for any object
 					INFINITE);       // wait for ever
 
-			//while there is nothing in the queue will will do nothing
-			while(threadQueue_.size()==0);
+			//wait for job added event
+			WaitForSingleObject(hJobAddedEvt_,INFINITE);
 
 			//loop though each event to see which it was
-			for(int i(0); i < runningEvents_.size(); ++i)
+			for(int i(0); i < (int)runningEvents_.size(); ++i)
 			{
 				if(dwEvent == (WAIT_OBJECT_0 + i))
 				{
+					//lock mutex
+					jobQueueMutex_.Lock();
+
 					//Run the next queued
-					threads_[i].Run(threadQueue_.front());
-					//pop it from the top
-					threadQueue_.pop();
+					threads_[i].Run(jobQueue_.front());
+					//pop it from the front
+					jobQueue_.pop();
+					//if no items left in the quee reset the event
+					if(jobQueue_.size()==0)
+					{
+						//reset job added event
+						ResetEvent(hJobAddedEvt_);
+						//set the all jobs finished event
+						SetEvent(hAllJobsFinishedEvt_);
+					}
+					//unlock mutex
+					jobQueueMutex_.Unlock();
+
 					//jump out of loop
 					break;
 				}
