@@ -9,6 +9,8 @@
 #include <conio.h>
 #include "windows.h" 
 
+#include "crtdbg.h"
+
 #include "ThreadPool.h"
 
 class A
@@ -66,104 +68,136 @@ class PrimeNumber
 public:
 	void operator ()(int num)
 	{
-			bool isPrime=true;
-			for ( int i = 0; i <= num; i++)
+		found_.clear();
+
+		bool isPrime=true;
+		for ( int i = 0; i <= num; i++)
+		{
+			for ( int j = 2; j <= num; j++)
 			{
-					for ( int j = 2; j <= num; j++)
-					{
-							if ( i!=j && i % j == 0 )
-							{
-							  isPrime=false;
-							  break;
-							}
-					}
-					if (isPrime)
-					{
-						std::cout <<"Prime:"<< i << std::endl;
-					}
-					isPrime=true;
+				if ( i!=j && i % j == 0 )
+				{
+				  isPrime=false;
+				  break;
+				}
 			}
+			if (isPrime)
+			{
+				found_.push_back(i);
+			}
+			isPrime=true;
+		}
+	}
+	std::vector<int> PrimesFound() const
+	{
+		return found_;
+	}
+private:
+	std::vector<int> found_;
+};
+
+
+class OutputData
+{
+public:
+
+	template<class T>
+	void operator ()(T container)
+	{
+		for (T::iterator it=container.begin() ; it < container.end(); it++ )
+		{	
+			if(it==container.begin())
+				std::cout << *it;
+			else
+				std::cout << ", " << *it;
+
+		}
 	}
 };
+
+void TestThreadObject()
+{
+	std::cout << "____Testing Thread Object____" << std::endl;
+	//Create thread object
+	kevsoft::Thread thread1;
+	//Set thread running to find prime numbers between 1 and 100
+	std::cout << "Start running Prime numbers 1 - 1000" << std::endl;
+	PrimeNumber workPrimes;//functor for the thread
+	thread1.Run(&workPrimes, 1000);//run the functor on the thread passing an int
+	Sleep(1);//sleep this thread so we get a few results
+	thread1.Suspend();//suppend the thread
+
+	//output the data we have so far
+	std::cout << "Thread Suspended" << std::endl;
+	std::cout << "Prime Numbers so far: ";
+	OutputData()(workPrimes.PrimesFound());
+
+	//resume the thread
+	thread1.Resume();
+	std::cout << std::endl << "Thread Resumed" << std::endl;
+
+	//wait for the thread to end
+	thread1.Wait();
+	std::cout << "Thread Wait Exited" << std::endl;
+
+	//output the prime numbers found
+	std::cout << "Prime Numbers found: ";
+	OutputData()(workPrimes.PrimesFound());
+
+	std::cout << std::endl;
+}
 void TestThreadPoolObject()
 {
 	std::cout << "____Testing Thread Pool____" << std::endl;
-	kevsoft::ThreadPool pool(3);
+
+	//Test pool of size 1
+	std::cout << "Testing pool of size 1" << std::endl;
+	kevsoft::ThreadPool pool1(1);
 
 	//Schedule a Sleep functor with no pramaters
-	pool.Schedule(&SleepFunctor());
+	pool1.Schedule(&SleepFunctor());
 	//Schedule a Sleep functor with int pramaters
-	pool.Schedule(&SleepFunctor(), 3000);
+	pool1.Schedule(&SleepFunctor(), 3000);
 	//Schedule a Sleep object to run the sleep method
-	pool.Schedule(&SleepFunctor(), &SleepFunctor::sleep);
+	pool1.Schedule(&SleepFunctor(), &SleepFunctor::sleep);
 	//Schedule a Sleep object to run the sleep method with int ppramaters
-	pool.Schedule(&SleepFunctor(), &SleepFunctor::sleep, 3000);
+	pool1.Schedule(&SleepFunctor(), &SleepFunctor::sleep, 3000);
 
-	pool.Wait();
+	std::cout << "Waiting for pool to finish" << std::endl;
+	pool1.Wait();//wait for pool to finish its schedule
+	std::cout << "pool finished" << std::endl << std::endl;
+
+
+	//Test a pool of size 4
+	std::cout << "Testing pool of size 4" << std::endl;
+	kevsoft::ThreadPool pool2(4);
+
+	//Schedule a Sleep functor with no pramaters
+	pool2.Schedule(&SleepFunctor());
+	//Schedule a Sleep functor with int pramaters
+	pool2.Schedule(&SleepFunctor(), 3000);
+	//Schedule a Sleep object to run the sleep method
+	pool2.Schedule(&SleepFunctor(), &SleepFunctor::sleep);
+	//Schedule a Sleep object to run the sleep method with int ppramaters
+	pool2.Schedule(&SleepFunctor(), &SleepFunctor::sleep, 3000);
+
+	std::cout << "Waiting for pool to finish" << std::endl;
+	pool2.Wait();//wait for pool to finish its schedule
+	std::cout << "pool finished" << std::endl;
+
+
 }
 int _tmain(int argc, _TCHAR* argv[])
 {
-	/*A *a = new A();
-	kevsoft::Thread<A, std::string> *thread1 = new kevsoft::Thread<A, std::string>();
-	kevsoft::Thread<A, std::string> *thread2 = new kevsoft::Thread<A, std::string>();
-	kevsoft::Thread<A, std::string> *thread3 = new kevsoft::Thread<A, std::string>();
-	
+	//Test the thread object
+	TestThreadObject();
 
-	thread1->Run(a, "1");
-	thread1->Wait();
-	thread2->Run(a, "2");
-	thread2->Wait();
-	thread3->Run(a, "3");
-	thread3->Wait();
-
-	delete thread1;
-	delete thread2;
-	delete thread3;*/
-
-	//kevsoft::Thread thread1;
-	//kevsoft::Thread thread2;
-
-	//thread1.Run(&SleepFunctor());
-	//std::cout << "Start 1... running: " << thread1.isRunning() << std::endl;
-	//thread1.Wait();
-	//thread1.isRunning();
-	//std::cout << "Done 1... running: " << thread1.isRunning() << std::endl;
-
-	//thread2.Run(&SleepFunctor());
-	//thread2.Wait();
-	//std::cout << "Done 2..." << std::endl;
-
-	//thread1.Run(&SleepFunctor());
-	//thread1.Wait();
-	//std::cout << "Done 1..." << std::endl;
-
-	//thread2.Run(&SleepFunctor(), &SleepFunctor::sleep);
-	//thread2.Wait();
-	//std::cout << "Done 2..." << std::endl;
-
-	//thread1.Run(&SleepFunctor(), 1000);
-	//thread1.Wait();
-	//std::cout << "Done 1 with args..." << std::endl;
-
-	//thread2.Run(&SleepFunctor(), &SleepFunctor::sleep, 1000);
-	//thread2.Wait();
-	//std::cout << "Done 2 with args..." << std::endl;
-
-	//std::cout << "Run std::string arg on A" << std::endl;
-	//thread1.Run(&A(), std::string("Hello123"));
-	//std::cout << "Copying Thread1" << std::endl;
-	//kevsoft::Thread thread1cpy(thread1);
-	////thread1.isRunning();
-	//thread1.Wait();
-	//thread1cpy.Wait();
-
-	//thread1.Run(&A(), std::string("Hello123"));
-	
-	kevsoft::Thread thread;
-	thread.Wait();
-
+	//Test the thread pool object
 	TestThreadPoolObject();
-	//std::cin.get();
+	
+	_CrtDumpMemoryLeaks();
+
+	std::cin.get();
 	return 0;
 }
 

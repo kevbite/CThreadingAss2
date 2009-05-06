@@ -4,6 +4,8 @@
 
 namespace kevsoft {
 
+	/*	Mutex object that wraps the Win32 API (CRITICAL_SECTION)
+	*/
 	class Mutex
 	{
 	private:

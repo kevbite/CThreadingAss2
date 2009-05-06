@@ -1,8 +1,9 @@
 #pragma once
 namespace kevsoft{ namespace exceptions {
 
-class AlreadyRunningException
-{};
+	//An Already Running Exception
+	class AlreadyRunningException
+	{};
 
 
 

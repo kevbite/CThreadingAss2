@@ -213,6 +213,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\Runnable.h"
+				>
+			</File>
+			<File
+				RelativePath=".\RunnableBase.h"
+				>
+			</File>
+			<File
 				RelativePath=".\stdafx.h"
 				>
 			</File>
@@ -222,14 +230,6 @@
 			</File>
 			<File
 				RelativePath=".\Thread.h"
-				>
-			</File>
-			<File
-				RelativePath=".\ThreadFunctor.h"
-				>
-			</File>
-			<File
-				RelativePath=".\ThreadFunctorBase.h"
 				>
 			</File>
 			<File

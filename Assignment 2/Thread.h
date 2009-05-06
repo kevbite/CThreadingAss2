@@ -2,7 +2,7 @@
 #include <windows.h>
 #include <process.h>
 #include "Exceptions.h"
-#include "ThreadFunctor.h"
+#include "Runnable.h"
 
 namespace kevsoft {
 
@@ -11,53 +11,53 @@ namespace kevsoft {
 
 	public:
 	   
-		Thread(void);
+		Thread(void);						//Default Constructor
 
-		~Thread(void);
+		~Thread(void);						//Destructor
 
-		Thread(const Thread&);
+		Thread(const Thread&);				//Copy Constructor
 
-		void init();
+		void init();						//initilise Thread
 
-		template <class C, class P>
-		bool Run(C* pClass, void (C::*pfFunc)(P), P p );
-
-		template <class C>
-		bool Run(C* pClass, void (C::*pfFunc)(void));
-
-		template <class C, class P>
-		bool Run(C* pClass, P p);
+		//Run Methods to accept diffrent types of objects, functions and parameters
+		template <class C, class P>			
+		bool Run(C* pClass, void (C::*pfFunc)(P), P p );//Run method for a method inside an object
+														//with paramters
 
 		template <class C>
-		bool Run(C* pClass);
+		bool Run(C* pClass, void (C::*pfFunc)(void));//Run method for a method inside an object
 
+		template <class C, class P>
+		bool Run(C* pClass, P p);			//Run method for a Functor with Paramters
 
-		bool Suspend();
+		template <class C>
+		bool Run(C* pClass);				//Run method for Functor
+
+		bool Suspend();						//Suppends the thread
 	 
-		bool Resume();
+		bool Resume();						//Resumes a Suppended Thread
 
-		bool Terminate();
+		bool Terminate();					//Terminates Thread
 
-		void Wait() const;
+		void Wait() const;					//Waits for the Thread to finish processing
 
-		bool isRunning() const;
-
-
-	private:
-		ThreadFunctorBase* functor_;
-
-		HANDLE handle_;		//Thread Handle
-		unsigned tid_;		// Thread ID
-
-
-		void CallThreadFunc() const;
-
-		static unsigned int __stdcall funcCall(void* pArg);
+		bool isRunning() const;				//Checks if the Thread in currently running
 
 	protected:
-		HANDLE hRunningEvent_;
 
-		bool Run(ThreadFunctorBase* pClass);
+		RunnableBase* functor_;				//The Runnable Object
+
+		HANDLE handle_;						//Thread Handle
+		unsigned tid_;						// Thread ID
+
+		bool Run(RunnableBase* pClass);		//Runs a RunnableBase Object
+
+		HANDLE hStoppedEvent_;
+	private:
+
+		void CallThreadFunc() const;		//Used for looping back the call from Win32
+		static unsigned int __stdcall funcCall(void* pArg);
+
 
 	};
 
@@ -71,17 +71,20 @@ namespace kevsoft {
 	{
 		Terminate();
 		CloseHandle (handle_);
+		CloseHandle (hStoppedEvent_);
 
+		//delete the current functor
 		delete functor_;
+		functor_ = 0;
 	}
 
 	void Thread::init()
 	{
-		hRunningEvent_ = CreateEvent( 
+		hStoppedEvent_ = CreateEvent( 
 			NULL,               // default security attributes
 			TRUE,               // manual-reset event
 			TRUE,              // initial state is signaled
-			TEXT("RunningEvt")  // object name
+			NULL  // object name
 			); 
 
 		handle_ = (HANDLE)_beginthreadex(
@@ -114,37 +117,45 @@ namespace kevsoft {
 	template <class C, class P>
 	bool Thread::Run(C* pClass, void (C::*pfFunc)(P), P p )
 	{
-		return Run((ThreadFunctorBase*)
-				new ThreadFunctor<C, P>(pClass, pfFunc, p)
+		//create a runnable ojbect and pass to the correct run method
+		return Run((RunnableBase*)
+				new Runnable<C, P>(pClass, pfFunc, p)
 				);
 	}
 
 	template <class C>
 	bool Thread::Run(C* pClass, void (C::*pfFunc)(void))
 	{
-		return Run((ThreadFunctorBase*)
-				new ThreadFunctor<C>(pClass, pfFunc)
+		//create a runnable ojbect and pass to the correct run method
+		return Run((RunnableBase*)
+				new Runnable<C>(pClass, pfFunc)
 				);
 	}
 	
 	template <class C, class P>
 	bool Thread::Run(C* pClass, P p)
 	{
-		return Run((ThreadFunctorBase*)
-				new ThreadFunctor<C, P>(pClass, p)
+		//create a runnable ojbect and pass to the correct run method
+		return Run((RunnableBase*)
+				new Runnable<C, P>(pClass, p)
 		);
 	}
 
 	template <class C>
 	bool Thread::Run(C* pClass)
 	{
-		return Run((ThreadFunctorBase*)
-			new ThreadFunctor<C>(pClass)
+		//create a runnable ojbect and pass to the correct run method
+		return Run((RunnableBase*)
+			new Runnable<C>(pClass)
 		);
 	}
 
-	bool Thread::Run(ThreadFunctorBase* pFunctor)
+	bool Thread::Run(RunnableBase* pFunctor)
 	{
+		//delete the current functor
+		delete functor_;
+		functor_ = 0;
+
 		//set the functor_ of class
 		functor_ = pFunctor;
 
@@ -154,7 +165,7 @@ namespace kevsoft {
 
 	bool Thread::Resume()
 	{
-		//if(running_) throw exceptions::AlreadyRunningException();
+		if(isRunning()) throw exceptions::AlreadyRunningException();
 		//try resume the thread
 		//Resume Thread return values:
 		// -1 = Failed
@@ -164,7 +175,7 @@ namespace kevsoft {
 		//if thread was resumed
 		if(result)
 			//reset the event so we know the tread is running
-			ResetEvent(hRunningEvent_);
+			ResetEvent(hStoppedEvent_);
 
 		//return success
 		return result;
@@ -172,8 +183,10 @@ namespace kevsoft {
 
 	bool Thread::Suspend()
 	{
+		//check that the thread is running 
+		if(!isRunning()) return false;
 		//Set the running event 
-		SetEvent(hRunningEvent_);
+		SetEvent(hStoppedEvent_);
 		
 		//try resume the thread
 		//Resume Thread return values:
@@ -188,7 +201,7 @@ namespace kevsoft {
 	bool Thread::Terminate()
 	{
 		//set the running event
-		SetEvent(hRunningEvent_);
+		SetEvent(hStoppedEvent_);
 		//get the result of the termination of thread
 		bool result = (TerminateThread(handle_, 0) != 0);
 		//return result
@@ -198,13 +211,14 @@ namespace kevsoft {
 	void Thread::Wait() const
 	{
 		//wait for a running event
-		WaitForSingleObject(hRunningEvent_,INFINITE);   
+		WaitForSingleObject(hStoppedEvent_,INFINITE);   
 	}
 
 	bool Thread::isRunning() const
 	{
+		bool result = false;
 		//do a wait for 0 ms, if 0 is returned object is signaled.
-		bool result = WaitForSingleObject(hRunningEvent_, 0) != 0;
+		result = WaitForSingleObject(hStoppedEvent_, 0) != 0;
 		//return result
 		return result;
 	}
@@ -217,7 +231,8 @@ namespace kevsoft {
 			(functor_->operator())();
 	}
 
-	/* Static */
+
+	/* Static method used for the Win32 Thread API */
 	unsigned int __stdcall Thread::funcCall(void* pArg) {
 
 		while (true)//we always want to keep this thread running

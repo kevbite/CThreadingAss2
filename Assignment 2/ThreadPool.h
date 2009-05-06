@@ -11,14 +11,14 @@ namespace kevsoft{
 	{
 	public:
 
-		ThreadPool(void);
+		ThreadPool(void);						//Default Constructor
 
-		ThreadPool(const int &PoolSize);
+		ThreadPool(const int &PoolSize);		//Constructor that specifys the pool size
 
-		void init(const int &PoolSize);
+		~ThreadPool(void);						//deconstructor
 
-		~ThreadPool(void);
 
+		//Run methods that can take various types n objects
 		template <class C, class P>
 		void Schedule(C* pClass, void (C::*pfFunc)(P), P p );
 
@@ -31,32 +31,37 @@ namespace kevsoft{
 		template <class C>
 		void Schedule(C* pClass);
 		
-		void Schedule(ThreadFunctorBase* pClass);
+		void Schedule(RunnableBase* pClass);	//schedules a job of type RunnableBase
 
-		void Wait();
+		void Wait();							//waits until all jobs are complete
 
 	private:
-		static const int DEFAULT_POOL_SIZE = 10;
-		std::queue<ThreadFunctorBase*> jobQueue_;
-		std::vector<PThread> threads_;
-		Thread poolThread_;
-		std::vector<HANDLE> runningEvents_;
+		static const int DEFAULT_POOL_SIZE = 10;//default size 
+		int poolSize_;							//the size of this pool
 
-		Mutex jobQueueMutex_;
-		HANDLE hJobAddedEvt_;
-		HANDLE hAllJobsFinishedEvt_;
-		void CheckSchedule(void);
+		std::queue<RunnableBase*> jobQueue_;	//job queue
+		std::vector<PThread> threads_;			//threads within this pool
+		Thread poolThread_;						//thread the pool runs on
+		std::vector<HANDLE> runningEvents_;		//running events of the threads
+
+		Mutex jobQueueMutex_;					//mutex used for jobqueue container 
+		HANDLE hJobAddedEvt_;					//job added event
+		HANDLE hAllJobsFinishedEvt_;			//all jobs finished event
+
+		void init(const int &PoolSize);			//sets up the pool object
+		void CheckSchedule(void);				//method that polls the job queue
+		void RunNextJob(int &thread);			//Run the next job on a certain thread
 
 	};
 
 	ThreadPool::ThreadPool(const int &poolSize)
 	{
-		init(poolSize);
+		init(poolSize);	//initialises the pool
 	}
 
 	ThreadPool::ThreadPool(void)
 	{
-		init(DEFAULT_POOL_SIZE);
+		init(DEFAULT_POOL_SIZE); //initialises the pool
 	}
 
 	void ThreadPool::init(const int &poolSize)
@@ -66,7 +71,7 @@ namespace kevsoft{
 					NULL,               // default security attributes
 					TRUE,               // manual-reset event
 					FALSE,              // initial state is nonsignaled
-					TEXT("JobAddedEvt")  // object name
+					NULL  // object name
 					); 
 
 		//Create All jobs finished added event
@@ -74,21 +79,25 @@ namespace kevsoft{
 					NULL,               // default security attributes
 					TRUE,               // manual-reset event
 					TRUE,              // initial state is signaled
-					TEXT("JobsFinishedEvt")  // object name
+					NULL  // object name
 					); 
+		poolSize_ = poolSize;
+
 		//reserve space in vectors
-		threads_.reserve(poolSize);
-		runningEvents_.reserve(poolSize);
+		threads_.reserve(poolSize_);
+		runningEvents_.reserve(poolSize_);
 
 		//loop though until poolsize
-		for(int i(0); i < poolSize; ++i)
+		for(int i(0); i < poolSize_; ++i)
 		{
-			//Create a Pool Thread
+			//Create a Thread
 			PThread t;
 			//Push it on to the vector
 			threads_.push_back(t);
+			
 			//Push the run event on to the vector
-			runningEvents_.push_back(t.RunningEventHandle());
+			runningEvents_.push_back(threads_[i].StoppedEventHandle());
+
 		}
 		//the pool has its own thread that it runs on
 		poolThread_.Run(this, &ThreadPool::CheckSchedule);
@@ -97,42 +106,45 @@ namespace kevsoft{
 
 	ThreadPool::~ThreadPool(void)
 	{
+		//close open handles
+		CloseHandle(hJobAddedEvt_);
+		CloseHandle(hAllJobsFinishedEvt_);
 	}
 
 	
 	template <class C, class P>
 	void ThreadPool::Schedule(C* pClass, void (C::*pfFunc)(P), P p )
 	{
-		return Schedule((ThreadFunctorBase*)
-				new ThreadFunctor<C, P>(pClass, pfFunc, p)
+		return Schedule((RunnableBase*)
+				new Runnable<C, P>(pClass, pfFunc, p)
 				);
 	}
 
 	template <class C>
 	void ThreadPool::Schedule(C* pClass, void (C::*pfFunc)(void))
 	{
-		return Schedule((ThreadFunctorBase*)
-				new ThreadFunctor<C>(pClass, pfFunc)
+		return Schedule((RunnableBase*)
+				new Runnable<C>(pClass, pfFunc)
 				);
 	}
 	
 	template <class C, class P>
 	void ThreadPool::Schedule(C* pClass, P p)
 	{
-		return Schedule((ThreadFunctorBase*)
-				new ThreadFunctor<C, P>(pClass, p)
+		return Schedule((RunnableBase*)
+				new Runnable<C, P>(pClass, p)
 		);
 	}
 
 	template <class C>
 	void ThreadPool::Schedule(C* pClass)
 	{
-		return Schedule((ThreadFunctorBase*)
-			new ThreadFunctor<C>(pClass)
+		return Schedule((RunnableBase*)
+			new Runnable<C>(pClass)
 		);
 	}
 
-	void ThreadPool::Schedule(ThreadFunctorBase* pFunctor)
+	void ThreadPool::Schedule(RunnableBase* pFunctor)
 	{
 		//lock the mutex
 		jobQueueMutex_.Lock();
@@ -157,7 +169,7 @@ namespace kevsoft{
 		{
 			//wait for a thread object to become free (using events)
 			DWORD dwEvent = 
-				WaitForMultipleObjects( 
+				WaitForMultipleObjects(
 					static_cast<DWORD>(runningEvents_.size()),// number of objects in array
 					&runningEvents_[0],     // array of objects
 					FALSE,       // wait for any object
@@ -171,28 +183,42 @@ namespace kevsoft{
 			{
 				if(dwEvent == (WAIT_OBJECT_0 + i))
 				{
-					//lock mutex
-					jobQueueMutex_.Lock();
-
-					//Run the next queued
-					threads_[i].Run(jobQueue_.front());
-					//pop it from the front
-					jobQueue_.pop();
-					//if no items left in the quee reset the event
-					if(jobQueue_.size()==0)
-					{
-						//reset job added event
-						ResetEvent(hJobAddedEvt_);
-						//set the all jobs finished event
-						SetEvent(hAllJobsFinishedEvt_);
-					}
-					//unlock mutex
-					jobQueueMutex_.Unlock();
+					//run next job on free thread
+					RunNextJob(i);
 
 					//jump out of loop
 					break;
 				}
 			}
 		}
+	}
+	void ThreadPool::RunNextJob(int &thread)
+	{
+		//lock mutex
+		jobQueueMutex_.Lock();
+
+		//Run the next queued
+		threads_[thread].Run(jobQueue_.front());
+		//pop it from the front
+		jobQueue_.pop();
+		//if no items left in the quee reset the event
+		if(jobQueue_.size()==0)
+		{
+			//reset job added event
+			ResetEvent(hJobAddedEvt_);
+
+			DWORD allRunning = 
+				WaitForMultipleObjects(
+					static_cast<DWORD>(runningEvents_.size()),// number of objects in array
+					&runningEvents_[0],     // array of objects
+					TRUE,       // wait for any object
+					INFINITE);       // wait for ever
+
+			if(allRunning==0)
+				//set the all jobs finished event
+				SetEvent(hAllJobsFinishedEvt_);
+		}
+		//unlock mutex
+		jobQueueMutex_.Unlock();
 	}
 }
