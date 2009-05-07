@@ -13,31 +13,27 @@
 
 #include "ThreadPool.h"
 
-class A
+class CopyTester
 {
 private:
-	std::string string_;
+	int copy_;
 public:
-	void DoSomeThing(void *)
+	//Default Constructor that sets copy for 1
+	CopyTester()
 	{
-		std::cout << "Done it";
+		copy_ = 1;
 	}
-	void operator ()(int)
+	//Create our own copy constructor
+	//that increases the copy number
+	CopyTester(CopyTester& copyTester)
 	{
-		std::cout << "int Done it";
-	}
-	void operator ()(bool)
-	{
-		std::cout << "bool Done it";
-	}
-	void operator ()(std::string s)
-	{
-		std::cout << s;
-		Sleep(1000);
+		copy_ = copyTester.copy_ + 1;
 	}
 	void operator ()(void)
 	{
-		std::cout << "Void Stuff";
+		//sleep for abit so we have time to copy while running
+		Sleep(2000);
+		std::cout << "Copy Tester " << copy_ << " Complete" << std::endl;
 	}
 };
 class SleepFunctor{
@@ -143,8 +139,23 @@ void TestThreadObject()
 	//output the prime numbers found
 	std::cout << "Prime Numbers found: ";
 	OutputData()(workPrimes.PrimesFound());
+	std::cout << std::endl << std::endl;
 
-	std::cout << std::endl;
+	std::cout << "Starting Copy thread test" << std::endl;
+	//Create the copy Tester functor
+	CopyTester copyTester;
+	//Create the thread
+	kevsoft::Thread thread2;
+	//set it running
+	thread2.Run(&copyTester);
+	//copy it
+	kevsoft::Thread copyOfThread2(thread2);
+	//wait for them both to complete
+	thread2.Wait();
+	copyOfThread2.Wait();
+
+	std::cout << "____Testing Thread Object Finished!____"
+					<< std::endl << std::endl;
 }
 void TestThreadPoolObject()
 {
@@ -186,7 +197,10 @@ void TestThreadPoolObject()
 	std::cout << "pool finished" << std::endl;
 
 
+	std::cout << "____Testing Thread Pool Finished!____" << std::endl << std::endl;
+
 }
+
 int _tmain(int argc, _TCHAR* argv[])
 {
 	//Test the thread object
@@ -195,8 +209,6 @@ int _tmain(int argc, _TCHAR* argv[])
 	//Test the thread pool object
 	TestThreadPoolObject();
 	
-	_CrtDumpMemoryLeaks();
-
 	std::cin.get();
 	return 0;
 }

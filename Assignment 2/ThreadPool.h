@@ -33,7 +33,7 @@ namespace kevsoft{
 		
 		void Schedule(RunnableBase* pClass);	//schedules a job of type RunnableBase
 
-		void Wait();							//waits until all jobs are complete
+		void Wait() const;							//waits until all jobs are complete
 
 	private:
 		static const int DEFAULT_POOL_SIZE = 10;//default size 
@@ -42,7 +42,7 @@ namespace kevsoft{
 		std::queue<RunnableBase*> jobQueue_;	//job queue
 		std::vector<PThread> threads_;			//threads within this pool
 		Thread poolThread_;						//thread the pool runs on
-		std::vector<HANDLE> runningEvents_;		//running events of the threads
+		std::vector<HANDLE> stoppedEvents_;		//running events of the threads
 
 		Mutex jobQueueMutex_;					//mutex used for jobqueue container 
 		HANDLE hJobAddedEvt_;					//job added event
@@ -85,7 +85,7 @@ namespace kevsoft{
 
 		//reserve space in vectors
 		threads_.reserve(poolSize_);
-		runningEvents_.reserve(poolSize_);
+		stoppedEvents_.reserve(poolSize_);
 
 		//loop though until poolsize
 		for(int i(0); i < poolSize_; ++i)
@@ -96,7 +96,7 @@ namespace kevsoft{
 			threads_.push_back(t);
 			
 			//Push the run event on to the vector
-			runningEvents_.push_back(threads_[i].StoppedEventHandle());
+			stoppedEvents_.push_back(threads_[i].StoppedEventHandle());
 
 		}
 		//the pool has its own thread that it runs on
@@ -158,7 +158,7 @@ namespace kevsoft{
 		jobQueueMutex_.Unlock();
 	}
 
-	void ThreadPool::Wait()
+	void ThreadPool::Wait() const
 	{
 		//wait until all jobs are finished
 		WaitForSingleObject(hAllJobsFinishedEvt_ ,INFINITE);
@@ -170,8 +170,8 @@ namespace kevsoft{
 			//wait for a thread object to become free (using events)
 			DWORD dwEvent = 
 				WaitForMultipleObjects(
-					static_cast<DWORD>(runningEvents_.size()),// number of objects in array
-					&runningEvents_[0],     // array of objects
+					static_cast<DWORD>(stoppedEvents_.size()),// number of objects in array
+					&stoppedEvents_[0],     // array of objects
 					FALSE,       // wait for any object
 					INFINITE);       // wait for ever
 
@@ -179,7 +179,7 @@ namespace kevsoft{
 			WaitForSingleObject(hJobAddedEvt_,INFINITE);
 
 			//loop though each event to see which it was
-			for(int i(0); i < (int)runningEvents_.size(); ++i)
+			for(int i(0); i < (int)stoppedEvents_.size(); ++i)
 			{
 				if(dwEvent == (WAIT_OBJECT_0 + i))
 				{
@@ -209,8 +209,8 @@ namespace kevsoft{
 
 			DWORD allRunning = 
 				WaitForMultipleObjects(
-					static_cast<DWORD>(runningEvents_.size()),// number of objects in array
-					&runningEvents_[0],     // array of objects
+					static_cast<DWORD>(stoppedEvents_.size()),// number of objects in array
+					&stoppedEvents_[0],     // array of objects
 					TRUE,       // wait for any object
 					INFINITE);       // wait for ever
 

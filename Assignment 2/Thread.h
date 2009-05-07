@@ -5,7 +5,10 @@
 #include "Runnable.h"
 
 namespace kevsoft {
-
+	/*
+	Thread class enables quick access to threading 
+	without directly using the windows API
+	*/
 	class Thread
 	{
 
@@ -42,6 +45,8 @@ namespace kevsoft {
 		void Wait() const;					//Waits for the Thread to finish processing
 
 		bool isRunning() const;				//Checks if the Thread in currently running
+
+		Thread& Thread::operator=(const Thread& t);// Assignment Operator
 
 	protected:
 
@@ -104,7 +109,7 @@ namespace kevsoft {
 		//Check if the thread has a functor assigned
 		if(thread.functor_!=0)
 			//Copy it to this Thread
-			functor_ = thread.functor_->Clone();	
+			functor_ = (thread.functor_->Clone());	
 		
 		//if the thread were copying is running
 		if(thread.isRunning())
@@ -216,9 +221,8 @@ namespace kevsoft {
 
 	bool Thread::isRunning() const
 	{
-		bool result = false;
 		//do a wait for 0 ms, if 0 is returned object is signaled.
-		result = WaitForSingleObject(hStoppedEvent_, 0) != 0;
+		bool result = WaitForSingleObject(hStoppedEvent_, 0) != 0;
 		//return result
 		return result;
 	}
@@ -231,6 +235,15 @@ namespace kevsoft {
 			(functor_->operator())();
 	}
 
+	Thread& Thread::operator=(const Thread& t) {
+		if (this != &t) {  // make sure not same object
+			Suspend();							//Suppend the thread
+			delete functor_;					// Delete old data
+
+			functor_ = t.functor_->Clone();		//clone the functor object
+		}
+		return *this;    // Return ref for multiple assignment
+	}//end operator=
 
 	/* Static method used for the Win32 Thread API */
 	unsigned int __stdcall Thread::funcCall(void* pArg) {
