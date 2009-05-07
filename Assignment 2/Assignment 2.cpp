@@ -1,5 +1,5 @@
 
-// Assignment 2.cpp : Defines the entry point for the console application.
+// Assignment 2.cpp : Effective C++ Multithreading Assignment 2, Kevin Smith (15018229)
 //
 
 #include "stdafx.h"
@@ -25,10 +25,10 @@ public:
 	}
 	//Create our own copy constructor
 	//that increases the copy number
-	CopyTester(CopyTester& copyTester)
-	{
-		copy_ = copyTester.copy_ + 1;
-	}
+	CopyTester(CopyTester& copyTester )
+		:copy_(copyTester.copy_ + 1)
+	{}
+
 	void operator ()(void)
 	{
 		//sleep for abit so we have time to copy while running

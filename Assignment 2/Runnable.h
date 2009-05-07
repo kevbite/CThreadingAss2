@@ -72,11 +72,14 @@ namespace kevsoft {
 		//Clones this object
 		RunnableBase* Clone(void)
 		{
-			//Returns a clone of this object
-			return new Runnable<T> (
+			// clone this object
+			RunnableBase* clone =  new Runnable<T> (
 				&T(*class_),
 				FuncPtr(pfFunc_)
 				);
+
+			//Return clone
+			return clone;
 		}
 
 		void operator ()(void)

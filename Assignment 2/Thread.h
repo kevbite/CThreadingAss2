@@ -36,6 +36,8 @@ namespace kevsoft {
 		template <class C>
 		bool Run(C* pClass);				//Run method for Functor
 
+		bool Run();				//Run the Functor
+
 		bool Suspend();						//Suppends the thread
 	 
 		bool Resume();						//Resumes a Suppended Thread
@@ -153,6 +155,13 @@ namespace kevsoft {
 		return Run((RunnableBase*)
 			new Runnable<C>(pClass)
 		);
+	}
+	bool Thread::Run()
+	{
+		//if no functor is set
+		if(functor_==0) return false;
+		
+		return Resume();
 	}
 
 	bool Thread::Run(RunnableBase* pFunctor)
