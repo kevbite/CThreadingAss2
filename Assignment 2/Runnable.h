@@ -31,7 +31,7 @@ namespace kevsoft {
 		{
 			//returns a clone of this object
 			return new Runnable<T,P>(
-				&T(*class_),
+				new T(*class_),
 				FuncPtr(pfFunc_),
 				P(args_)
 				);
@@ -40,6 +40,12 @@ namespace kevsoft {
 		{
 			//calls the specified method within the given class
 			(class_->*pfFunc_)(args_);
+		}
+
+		//Returns a pointer to the class
+		T* Class(void)
+		{
+			return class_;
 		}
 
 	private:
@@ -73,8 +79,8 @@ namespace kevsoft {
 		RunnableBase* Clone(void)
 		{
 			// clone this object
-			RunnableBase* clone =  new Runnable<T> (
-				&T(*class_),
+			RunnableBase* clone =  (RunnableBase*) new Runnable<T> (
+				new T(*class_),
 				FuncPtr(pfFunc_)
 				);
 
@@ -86,6 +92,12 @@ namespace kevsoft {
 		{
 			//calls the specified classes method
 			(class_->*pfFunc_)();
+		}
+
+		//Returns a pointer to the class
+		T* Class(void)
+		{
+			return class_;
 		}
 
 	private:

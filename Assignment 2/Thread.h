@@ -50,9 +50,11 @@ namespace kevsoft {
 
 		Thread& Thread::operator=(const Thread& t);// Assignment Operator
 
+		RunnableBase* Job();				//Returns pointer to current job
+
 	protected:
 
-		RunnableBase* functor_;				//The Runnable Object
+		RunnableBase* job_;					//The Runnable Object
 
 		HANDLE handle_;						//Thread Handle
 		unsigned tid_;						// Thread ID
@@ -69,7 +71,7 @@ namespace kevsoft {
 	};
 
 	Thread::Thread()
-		: functor_(0)
+		: job_(0)
 	{
 		init();
 	}
@@ -81,8 +83,8 @@ namespace kevsoft {
 		CloseHandle (hStoppedEvent_);
 
 		//delete the current functor
-		delete functor_;
-		functor_ = 0;
+		delete job_;
+		job_ = 0;
 	}
 
 	void Thread::init()
@@ -104,14 +106,14 @@ namespace kevsoft {
 	}
 
 	Thread::Thread(const Thread& thread)
-		:functor_(0)
+		:job_(0)
 	{
 		//This will set our Thread and Running event up
 		init();		
 		//Check if the thread has a functor assigned
-		if(thread.functor_!=0)
+		if(thread.job_!=0)
 			//Copy it to this Thread
-			functor_ = (thread.functor_->Clone());	
+			job_ = (thread.job_->Clone());	
 		
 		//if the thread were copying is running
 		if(thread.isRunning())
@@ -159,7 +161,7 @@ namespace kevsoft {
 	bool Thread::Run()
 	{
 		//if no functor is set
-		if(functor_==0) return false;
+		if(job_==0) return false;
 		
 		return Resume();
 	}
@@ -167,11 +169,11 @@ namespace kevsoft {
 	bool Thread::Run(RunnableBase* pFunctor)
 	{
 		//delete the current functor
-		delete functor_;
-		functor_ = 0;
+		delete job_;
+		job_ = 0;
 
-		//set the functor_ of class
-		functor_ = pFunctor;
+		//set the job_ of class
+		job_ = pFunctor;
 
 		//resume the thread
 		return Resume();
@@ -238,21 +240,26 @@ namespace kevsoft {
 
 	void Thread::CallThreadFunc() const
 	{
-		//if there is a thread functor object assigned
-		if(functor_!=0)
+		//if there is a thread job object assigned
+		if(job_!=0)
 			//run the operations
-			(functor_->operator())();
+			(job_->operator())();
 	}
 
 	Thread& Thread::operator=(const Thread& t) {
 		if (this != &t) {  // make sure not same object
 			Suspend();							//Suppend the thread
-			delete functor_;					// Delete old data
+			delete job_;					// Delete old data
 
-			functor_ = t.functor_->Clone();		//clone the functor object
+			job_ = t.job_->Clone();		//clone the job object
 		}
 		return *this;    // Return ref for multiple assignment
-	}//end operator=
+	}
+
+	RunnableBase* Thread::Job()
+	{
+		return job_;//returns the job
+	}
 
 	/* Static method used for the Win32 Thread API */
 	unsigned int __stdcall Thread::funcCall(void* pArg) {

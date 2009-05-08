@@ -5,35 +5,32 @@
 #include "stdafx.h"
 #include <iostream>
 #include <string>
-#include "Thread.h"
 #include <conio.h>
 #include "windows.h" 
-
-#include "crtdbg.h"
 
 #include "ThreadPool.h"
 
 class CopyTester
 {
 private:
-	int copy_;
+	int copyNo_;
 public:
 	//Default Constructor that sets copy for 1
 	CopyTester()
 	{
-		copy_ = 1;
+		copyNo_ = 1;
 	}
 	//Create our own copy constructor
 	//that increases the copy number
 	CopyTester(CopyTester& copyTester )
-		:copy_(copyTester.copy_ + 1)
+		:copyNo_(copyTester.copyNo_ + 1)
 	{}
 
 	void operator ()(void)
 	{
 		//sleep for abit so we have time to copy while running
 		Sleep(2000);
-		std::cout << "Copy Tester " << copy_ << " Complete" << std::endl;
+		std::cout << "Copy Tester " << copyNo_ << " Complete" << std::endl;
 	}
 };
 class SleepFunctor{
@@ -153,6 +150,13 @@ void TestThreadObject()
 	//wait for them both to complete
 	thread2.Wait();
 	copyOfThread2.Wait();
+
+	//we need to get the pointer to the copyed object
+	//as it is up to the user to distroy this
+	CopyTester* copyTester2 = ((kevsoft::Runnable<CopyTester>*)copyOfThread2.Job())->Class();
+	//distroy it
+	delete copyTester2;
+	copyTester2 = 0;
 
 	std::cout << "____Testing Thread Object Finished!____"
 					<< std::endl << std::endl;
